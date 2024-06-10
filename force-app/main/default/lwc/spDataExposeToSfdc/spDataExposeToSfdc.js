@@ -10,32 +10,26 @@ export default class SpDataExposeToSfdc extends LightningElement {
         { label: 'Type', fieldName: 'type', type: 'text' },
         { label: 'Modified By', fieldName: 'modifiedBy', type: 'text' },
         { label: 'Modified', fieldName: 'modified', type: 'date' },
-        { label: 'File Size', fieldName: 'fileSize', type: 'number' },
         { label: 'Child Count', fieldName: 'childCount', type: 'number' }
     ];
 
     handleLogin() {
+        console.log('handleLogin called');
         const loginWindow = window.open('https://login.microsoftonline.com/', '_blank');
-
         const timer = setInterval(() => {
-            try {
-                if (loginWindow.document.URL.includes('https://login.microsoftonline.com/common/oauth2/nativeclient')) {
-                    clearInterval(timer);
-                    loginWindow.close();
-                    this.authenticateUser();
-                }
-            } catch (e) {
-                if (loginWindow.closed) {
-                    clearInterval(timer);
-                    this.authenticateUser();
-                }
+            if (loginWindow.closed) {
+                console.log('Login window closed');
+                clearInterval(timer);
+                this.authenticateUser();
             }
-        }, 500);
+        }, 1000);
     }
 
     authenticateUser() {
+        console.log('authenticateUser called');
         getAccessToken()
             .then((token) => {
+                console.log('Access token received:', token);
                 if (token) {
                     this.showButton = false;
                     this.fetchData();
@@ -49,8 +43,10 @@ export default class SpDataExposeToSfdc extends LightningElement {
     }
 
     fetchData() {
+        console.log('fetchData called');
         getSharePointData()
             .then((result) => {
+                console.log('Data fetched:', result);
                 this.data = result.map((item, index) => ({ ...item, id: index + 1 }));
             })
             .catch((error) => {

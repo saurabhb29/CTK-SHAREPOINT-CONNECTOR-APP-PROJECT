@@ -1,6 +1,7 @@
 <template>
     <lightning-button label="Login to SharePoint" onclick={handleLogin} if:true={showButton}></lightning-button>
     <lightning-datatable 
+        hide-checkbox-column
         data={data}
         columns={columns}
         key-field="id"

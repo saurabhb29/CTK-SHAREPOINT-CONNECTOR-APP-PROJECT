@@ -1,14 +1,13 @@
 public class SharePointConnectorController {
     private static final String NAMED_CREDENTIAL = 'MyNamedCred';
+
     @AuraEnabled(cacheable=true)
     public static String getAccessToken() {
         HttpRequest req = new HttpRequest();
         req.setEndpoint('callout:' + NAMED_CREDENTIAL + '/token');
         req.setMethod('POST');
         req.setHeader('Content-Type', 'application/x-www-form-urlencoded');
-        String body = 'grant_type=client_credentials' +
-        '&scope=https://graph.microsoft.com/.default';
-		//
+        String body = 'grant_type=client_credentials&scope=https://graph.microsoft.com/.default';
         req.setBody(body);
 
         Http http = new Http();
@@ -28,27 +27,59 @@ public class SharePointConnectorController {
     public class AuthenticationException extends Exception {}
 
     @AuraEnabled(cacheable=true)
-    public static String getSharePointData() {
+    public static List<Map<String, Object>> getSharePointData() {
         try {
-            // Get access token
             String accessToken = getAccessToken();
-
-            // Construct SharePoint API URL using Named Credential
-            String namedCredential = 'callout:SharePointNamedCredential'; // Replace with your Named Credential name
+            String namedCredential = 'callout:SharePointNamedCredential';
             String relativeUrl = '/v1.0/sites/cynoteck.sharepoint.com,c9dee470-0a13-4670-882b-9764b2ea99aa,34774c41-d9c0-4be1-9dd6-6b24a35c22c5/lists/5a2e71dd-98be-4aa4-a5cb-44eb68742055/items?$expand=fields';
-          //  String sharepointUrl = 'https://graph.microsoft.com/v1.0/sites/cynoteck.sharepoint.com,c9dee470-0a13-4670-882b-9764b2ea99aa,34774c41-d9c0-4be1-9dd6-6b24a35c22c5/lists/5a2e71dd-98be-4aa4-a5cb-44eb68742055/items?$expand=fields';
-			String sharepointUrl = namedCredential + relativeUrl;
+            String sharepointUrl = namedCredential + relativeUrl;
             System.debug('SharePoint Data URL: ' + sharepointUrl);
 
-            // Make the callout
             String response = callout(sharepointUrl, 'GET', accessToken);
-            // Log the response
             System.debug('SharePoint Data Response: ' + response);
-            return response;
+
+            // Parse the JSON response
+            Map<String, Object> responseMap = (Map<String, Object>) JSON.deserializeUntyped(response);
+            if (responseMap.containsKey('value')) {
+                List<Object> rawItems = (List<Object>) responseMap.get('value');
+                List<Map<String, Object>> items = new List<Map<String, Object>>();
+                for (Object rawItem : rawItems) {
+                    Map<String, Object> rawItemMap = (Map<String, Object>) rawItem;
+                    Map<String, Object> fields = (Map<String, Object>) rawItemMap.get('fields');
+                    Map<String, Object> item = new Map<String, Object>();
+                    item.put('name', (String) fields.get('LinkFilename')); // Adjust field names as per SharePoint response
+                    item.put('type', (String) fields.get('ContentType'));
+                    item.put('modifiedBy', (String) fields.get('LastModifiedBy.User.DisplayName'));
+                    item.put('modified', (String) fields.get('Modified'));
+
+                    // Handle FileSizeDisplay field
+                    // if (fields.get('FileSizeDisplay') != null) {
+                    //     if (fields.get('FileSizeDisplay') instanceof Integer) {
+                    //         item.put('fileSize', (Integer) fields.get('FileSizeDisplay'));
+                    //     } else {
+                    //         item.put('fileSize', Integer.valueOf((String) fields.get('FileSizeDisplay')));
+                    //     }
+                    // }
+
+                    // Handle ItemChildCount field
+                    if (fields.get('ItemChildCount') != null) {
+                        if (fields.get('ItemChildCount') instanceof Integer) {
+                            item.put('childCount', (Integer) fields.get('ItemChildCount'));
+                        } else {
+                            item.put('childCount', Integer.valueOf((String) fields.get('ItemChildCount')));
+                        }
+                    }
+
+                    items.add(item);
+                }
+                System.debug('Parsed items: ' + items);
+                return items;
+            } else {
+                throw new CalloutException('Unexpected response structure: ' + response);
+            }
         } catch (Exception e) {
-            // Handle exceptions
             System.debug('Exception occurred: ' + e.getMessage());
-            return null;
+            throw new CalloutException('Error during callout: ' + e.getMessage());
         }
     }
 
