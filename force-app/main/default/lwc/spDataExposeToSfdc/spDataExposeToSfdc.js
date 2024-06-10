@@ -1,54 +1,60 @@
 import { LightningElement, track } from 'lwc';
+import getAccessToken from '@salesforce/apex/SharePointConnectorController.getAccessToken';
 import getSharePointData from '@salesforce/apex/SharePointConnectorController.getSharePointData';
 
 export default class SpDataExposeToSfdc extends LightningElement {
+    @track showButton = true;
     @track data = [];
     @track columns = [
-        { label: 'Title', fieldName: 'title' },
-        { label: 'Item Name', fieldName: 'itemName' },
-        { label: 'Modified', fieldName: 'modified' },
-        { label: 'Modified By', fieldName: 'modifiedBy' },
-        { label: 'Type', fieldName: 'type' },
+        { label: 'Name', fieldName: 'name', type: 'text' },
+        { label: 'Type', fieldName: 'type', type: 'text' },
+        { label: 'Modified By', fieldName: 'modifiedBy', type: 'text' },
+        { label: 'Modified', fieldName: 'modified', type: 'date' },
         { label: 'File Size', fieldName: 'fileSize', type: 'number' },
         { label: 'Child Count', fieldName: 'childCount', type: 'number' }
     ];
 
-    handleButtonClick() {
-        const clientId = '0c4225d7-fbe3-4d1b-b8fd-e5905231e6b0';
-        const redirectUri = encodeURIComponent(window.location.href);
-        const loginUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${clientId}&response_type=code&redirect_uri=${redirectUri}&response_mode=query&scope=openid+profile&state=12345`;
-        window.location.href = loginUrl;
+    handleLogin() {
+        const loginWindow = window.open('https://login.microsoftonline.com/', '_blank');
+
+        const timer = setInterval(() => {
+            try {
+                if (loginWindow.document.URL.includes('https://login.microsoftonline.com/common/oauth2/nativeclient')) {
+                    clearInterval(timer);
+                    loginWindow.close();
+                    this.authenticateUser();
+                }
+            } catch (e) {
+                if (loginWindow.closed) {
+                    clearInterval(timer);
+                    this.authenticateUser();
+                }
+            }
+        }, 500);
     }
 
-    connectedCallback() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const code = urlParams.get('code');
-
-        if (code) {
-            console.log('Authorization code:', code);
-            this.fetchData();
-        } else {
-            console.log('No authorization code found');
-        }
+    authenticateUser() {
+        getAccessToken()
+            .then((token) => {
+                if (token) {
+                    this.showButton = false;
+                    this.fetchData();
+                } else {
+                    console.error('Failed to authenticate');
+                }
+            })
+            .catch((error) => {
+                console.error('Error getting access token: ', error);
+            });
     }
 
     fetchData() {
         getSharePointData()
-            .then(result => {
-                console.log('SharePoint data received:', result);
-                this.data = result.map(item => ({
-                    title: item.fields.Title,
-                    itemName: item.fields.ItemName,
-                    modified: item.fields.Modified,
-                    modifiedBy: item.fields.ModifiedBy,
-                    type: item.fields.Type,
-                    fileSize: item.fields.FileSize,
-                    childCount: item.fields.ChildCount
-                }));
-                console.log('Mapped data:', this.data);
+            .then((result) => {
+                this.data = result.map((item, index) => ({ ...item, id: index + 1 }));
             })
-            .catch(error => {
-                console.error('Error fetching data:', error);
+            .catch((error) => {
+                console.error('Error fetching data: ', error);
             });
     }
 }

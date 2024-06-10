@@ -1,6 +1,6 @@
 public class SharePointConnectorController {
     private static final String NAMED_CREDENTIAL = 'MyNamedCred';
-
+    @AuraEnabled(cacheable=true)
     public static String getAccessToken() {
         HttpRequest req = new HttpRequest();
         req.setEndpoint('callout:' + NAMED_CREDENTIAL + '/token');

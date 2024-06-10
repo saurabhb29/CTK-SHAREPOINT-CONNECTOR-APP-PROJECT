@@ -1,13 +1,9 @@
 <template>
-    <lightning-card title="SharePoint Data">
-        <template if:false={showButton}>
-            <lightning-button label="Authorize and Fetch Data" onclick={handleButtonClick}></lightning-button>
-        </template>
-        <lightning-datatable
-            key-field="id"
-            data={data}
-            columns={columns}
-            hide-checkbox-column="true"
-        ></lightning-datatable>
-    </lightning-card>
+    <lightning-button label="Login to SharePoint" onclick={handleLogin} if:true={showButton}></lightning-button>
+    <lightning-datatable 
+        data={data}
+        columns={columns}
+        key-field="id"
+        if:false={showButton}>
+    </lightning-datatable>
 </template>
