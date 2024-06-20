@@ -1,0 +1,22 @@
+.container{
+    display: flex;
+    height: 100%;
+}
+.left-pane{
+    overflow: auto;
+    width: 50%;
+}
+.right-pane{
+    overflow: auto;
+    width: 50%;
+}
+.fileupload{
+    /* margin-left: 150px;
+    margin-top: -50px; */
+    margin-left: -1px;
+    margin-top: 0px;
+}
+.createfolder{
+    font-size: 17px;
+    border-radius: 10px;
+}

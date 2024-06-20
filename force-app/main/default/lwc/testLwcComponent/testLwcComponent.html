@@ -1,0 +1,24 @@
+<template>
+    <template if:true={isAuthenticated}>
+        <!-- Display data table when authenticated -->
+        <lightning-card title="SharePoint Data" icon-name="standard:document">
+            <div class="slds-m-around_medium">
+                <lightning-datatable
+                    data={data}
+                    columns={columns}
+                    key-field="id"
+                    hide-checkbox-column="true">
+                </lightning-datatable>
+            </div>
+        </lightning-card>
+    </template>
+    <template if:false={isAuthenticated}>
+        <!-- Display authentication button when not authenticated -->
+        <lightning-card title="Authenticate to SharePoint" icon-name="standard:connected_apps">
+            <div class="slds-m-around_medium">
+                <p>Please authenticate to access SharePoint data.</p>
+                <lightning-button label="Authenticate" onclick={authenticate} variant="brand"></lightning-button>
+            </div>
+        </lightning-card>
+    </template>
+</template>

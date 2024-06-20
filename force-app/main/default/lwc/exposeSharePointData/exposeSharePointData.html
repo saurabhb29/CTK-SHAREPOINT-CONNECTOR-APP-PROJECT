@@ -1,0 +1,30 @@
+<template>
+    <lightning-card title="SharePoint App Data">
+        <div class="container">
+            <div class="left-pane">
+                <lightning-button label="Create Folder" class="createfolder" onclick={handleCreateFolder}></lightning-button>
+                <lightning-input 
+                    type="file" 
+                    label="Upload File" 
+                    class="fileupload" 
+                    onchange={handleUploadFile}
+                    value={selectedFileName}
+                ></lightning-input>
+                <lightning-datatable
+                    key-field="id"
+                    data={folders}
+                    columns={columns}
+                    is-loading={isLoading}
+                    onrowaction={handleRowAction}
+                    hide-checkbox-column
+                >
+                </lightning-datatable>
+            </div>
+            <div class="right-pane">
+                <template if:true={selectedFolderId}>
+                    <c-folder-files folder-id={selectedFolderId}></c-folder-files>
+                </template>
+            </div>
+        </div>
+    </lightning-card>
+</template>

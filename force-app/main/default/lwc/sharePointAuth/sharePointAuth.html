@@ -1,0 +1,24 @@
+<!-- <template>
+    
+        <template if:true={showConnectButton}>
+            <lightning-button label="Connect to Sharepoint" class="connect" onclick={handleConnect}></lightning-button>
+        </template>
+        <template if:false={showConnectButton}>
+            <! Include your SharePoint data display component here -->
+            <!-- <c-share-point-data></c-share-point-data>
+        </template>
+</template> --> 
+
+
+<template>
+    <template if:true={showConnectButton}>
+        <div class="custom-button">
+            <div>
+            <img src={sharePointIconUrl} alt="SharePoint Icon" class="icon"/></div>
+            <div class = 'abc' onclick={handleConnect}><span>Connect to SharePoint</span></div>
+        </div>
+    </template>
+    <template if:false={showConnectButton}>
+        <c-expose-Share-Point-Data></c-expose-Share-Point-Data>
+    </template>
+</template>

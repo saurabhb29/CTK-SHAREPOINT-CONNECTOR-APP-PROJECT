@@ -1,66 +1,301 @@
 public class SPIntegration {
+    private static final String NAMED_CREDENTIAL = 'MyNamedCred';
+    
     @AuraEnabled(cacheable=true)
-    public static List<Map<String, Object>> getAllFoldersAndFiles() {
-        List<Map<String, Object>> itemsList = new List<Map<String, Object>>();
-
-        String endpoint = 'callout:SharePoint_Named_Credentials/_api/web/lists/GetByTitle(\'Documents\')/items?$expand=Folder,File,Editor&$select=Title,FileLeafRef,Modified,Editor/Title,File/Length,Folder/ItemCount';
+    public static String getAccessToken() {
         HttpRequest req = new HttpRequest();
-        req.setEndpoint(endpoint);
-        req.setMethod('GET');
-        req.setHeader('Accept', 'application/json');
-        req.setHeader('Content-Type', 'application/json');
+        req.setEndpoint('callout:' + NAMED_CREDENTIAL + '/token');
+        req.setMethod('POST');
+        req.setHeader('Content-Type', 'application/x-www-form-urlencoded');
+        String body = 'grant_type=client_credentials' +
+        '&scope=https://graph.microsoft.com/.default';
+        req.setBody(body);
 
         Http http = new Http();
         HttpResponse res = http.send(req);
 
-        System.debug('Response Status: ' + res.getStatusCode());
-        System.debug('Response Body: ' + res.getBody());
+        System.debug('HTTP Status (Access Token): ' + res.getStatus());
+        System.debug('HTTP Response (Access Token): ' + res.getBody());
 
         if (res.getStatusCode() == 200) {
-            Map<String, Object> responseBody = (Map<String, Object>) JSON.deserializeUntyped(res.getBody());
-            System.debug('Response Body Deserialized: ' + responseBody);
-            List<Object> items = (List<Object>) responseBody.get('value');
-
-            for (Object item : items) {
-                Map<String, Object> itemMap = (Map<String, Object>) item;
-                System.debug('Item: ' + itemMap);
-                Map<String, Object> itemDetails = new Map<String, Object>();
-
-                String title = (String) itemMap.get('Title');
-                String itemName = (String) itemMap.get('FileLeafRef');
-                String modified = (String) itemMap.get('Modified');
-                Map<String, Object> editor = (Map<String, Object>) itemMap.get('Editor');
-                String modifiedBy = editor != null ? (String) editor.get('Title') : 'Unknown';
-
-                itemDetails.put('title', title);
-                itemDetails.put('itemName', itemName);
-                itemDetails.put('modified', modified);
-                itemDetails.put('modifiedBy', modifiedBy);
-
-                if (itemMap.containsKey('Folder')) {
-                    Map<String, Object> folder = (Map<String, Object>) itemMap.get('Folder');
-                    Integer childCount = (folder != null && folder.get('ItemCount') != null) ? Integer.valueOf(folder.get('ItemCount').toString()) : 0;
-                    itemDetails.put('type', 'Folder');
-                    itemDetails.put('childCount', childCount);
-                    itemDetails.put('Folder', folder);
-                    System.debug('Folder Details: ' + folder);
-                } else if (itemMap.containsKey('File')) {
-                    Map<String, Object> file = (Map<String, Object>) itemMap.get('File');
-                    Integer fileSize = (file != null && file.get('Length') != null) ? Integer.valueOf(file.get('Length').toString()) : 0;
-                    itemDetails.put('type', 'File');
-                    itemDetails.put('fileSize', fileSize);
-                    itemDetails.put('File', file);
-                    System.debug('File Details: ' + file);
-                }
-
-                itemsList.add(itemDetails);
-                System.debug('Item Details Added: ' + itemDetails);
-            }
+            Map<String, Object> responseMap = (Map<String, Object>) JSON.deserializeUntyped(res.getBody());
+            return (String) responseMap.get('access_token');
         } else {
-            throw new AuraHandledException('Error from SharePoint: ' + res.getStatusCode() + ' ' + res.getBody());
+            throw new AuthenticationException('Error authenticating to SharePoint: ' + res.getBody());
+        }
+    }
+
+    private static String getSiteId() {
+        List<SharePoint_Connector__mdt> siteIdList = [SELECT SiteId__c FROM SharePoint_Connector__mdt WHERE SiteId__c != NULL LIMIT 1];
+        if (!siteIdList.isEmpty()) {
+            return siteIdList[0].SiteId__c;
+        } else {
+            throw new SiteIdNotFoundException('SiteId__c not found in SharePoint_Connector__mdt');
+        }
+    }
+
+    private static String callout(String url, String method, String accessToken) {
+        HttpRequest req = new HttpRequest();
+        req.setEndpoint(url);
+        req.setMethod(method);
+        req.setHeader('Authorization', 'Bearer ' + accessToken);
+        req.setHeader('Content-Type', 'application/json');
+        req.setHeader('Accept', 'application/json');
+
+        Http http = new Http();
+        HttpResponse res = http.send(req);
+
+        System.debug('HTTP Status: ' + res.getStatus());
+        System.debug('HTTP Response: ' + res.getBody());
+
+        if (res.getStatusCode() == 200 || res.getStatusCode() == 201 || res.getStatusCode() == 204) {
+            return res.getBody();
+        } else {
+            throw new CalloutException('Error during callout: ' + res.getStatus() + ' - ' + res.getBody());
+        }
+    }
+
+    private static String callout(String url, String method, String accessToken, String body) {
+        HttpRequest req = new HttpRequest();
+        req.setEndpoint(url);
+        req.setMethod(method);
+        req.setHeader('Authorization', 'Bearer ' + accessToken);
+        req.setHeader('Content-Type', 'application/json');
+        req.setHeader('Accept', 'application/json');
+        req.setBody(body);
+
+        Http http = new Http();
+        HttpResponse res = http.send(req);
+
+        System.debug('HTTP Status: ' + res.getStatus());
+        System.debug('HTTP Response: ' + res.getBody());
+
+        if (res.getStatusCode() == 200 || res.getStatusCode() == 201 || res.getStatusCode() == 204) {
+            return res.getBody();
+        } else {
+            throw new CalloutException('Error during callout: ' + res.getStatus() + ' - ' + res.getBody());
+        }
+    }
+
+    @AuraEnabled(cacheable=true)
+    public static String getSharePointFolders() {
+        try {
+            String accessToken = getAccessToken();
+            String siteId = getSiteId();
+
+            String sharepointUrl = 'callout:SharePointNamedCredential/v1.0/sites/' + siteId + '/drive/root/children';
+            System.debug('SharePoint Items URL: ' + sharepointUrl);
+
+            String response = callout(sharepointUrl, 'GET', accessToken);
+            System.debug('SharePoint Items Response: ' + response);
+            return response;
+        } catch (Exception e) {
+            System.debug('Exception occurred: ' + e.getMessage());
+            return null;
+        }
+    }
+
+    @AuraEnabled(cacheable=true)
+    public static String getSharePointFiles(String folderId) {
+        try {
+            String accessToken = getAccessToken();
+            String siteId = getSiteId();
+
+            String sharepointUrl;
+            if (folderId == null) {
+                sharepointUrl = 'callout:SharePointNamedCredential/v1.0/sites/' + siteId + '/drive/root/children';
+            } else {
+                sharepointUrl = 'callout:SharePointNamedCredential/v1.0/sites/' + siteId + '/drive/items/' + folderId + '/children';
+            }
+
+            String response = callout(sharepointUrl, 'GET', accessToken);
+            System.debug('SharePoint Files Response: ' + response);
+            return response;
+        } catch (Exception e) {
+            System.debug('Exception occurred: ' + e.getMessage());
+            return null;
+        }
+    }
+
+    @AuraEnabled
+    public static void createSharePointFolder(String parentId, String folderName) {
+        try {
+            String accessToken = getAccessToken();
+            String siteId = getSiteId();
+            String sharepointUrl;
+
+            if (parentId == null || parentId == 'root') {
+                sharepointUrl = 'callout:SharePointNamedCredential/v1.0/sites/' + siteId + '/drive/root/children';
+            } else {
+                sharepointUrl = 'callout:SharePointNamedCredential/v1.0/sites/' + siteId + '/drive/items/' + parentId + '/children';
+            }
+
+            Map<String, Object> folderData = new Map<String, Object>();
+            folderData.put('name', folderName);
+            folderData.put('folder', new Map<String, Object>());
+            folderData.put('@microsoft.graph.conflictBehavior', 'rename');
+
+            String response = callout(sharepointUrl, 'POST', accessToken, JSON.serialize(folderData));
+            System.debug('Create Folder Response: ' + response);
+        } catch (Exception e) {
+            System.debug('Exception occurred while creating folder: ' + e.getMessage());
+            throw new CalloutException('Error during callout: ' + e.getMessage());
+        }
+    }
+
+    @AuraEnabled
+public static void uploadSharePointFile(String parentId, String fileName, String base64Data) {
+    try {
+        String accessToken = getAccessToken();
+        String siteId = getSiteId();
+        String encodedFileName = EncodingUtil.urlEncode(fileName, 'UTF-8');
+        String sharepointUrl;
+
+        if (parentId == null || parentId == 'root') {
+            sharepointUrl = 'callout:SharePointNamedCredential/v1.0/sites/' + siteId + '/drive/root:/' + encodedFileName + ':/content';
+        } else {
+            sharepointUrl = 'callout:SharePointNamedCredential/v1.0/sites/' + siteId + '/drive/items/' + parentId + ':/' + encodedFileName + ':/content';
         }
 
-        System.debug('Final Items List: ' + itemsList);
-        return itemsList;
+        // Convert base64 to Blob
+        Blob fileBlob = EncodingUtil.base64Decode(base64Data);
+
+        HttpRequest req = new HttpRequest();
+        req.setEndpoint(sharepointUrl);
+        req.setMethod('PUT');
+        req.setHeader('Authorization', 'Bearer ' + accessToken);
+        req.setHeader('Content-Type', 'application/octet-stream');
+        req.setHeader('Accept', 'application/json');
+        req.setBodyAsBlob(fileBlob);
+
+        // Detailed Debugging
+        System.debug('Uploading to SharePoint URL: ' + sharepointUrl);
+        System.debug('Request Headers: Authorization=' + req.getHeader('Authorization') + ', Content-Type=' + req.getHeader('Content-Type') + ', Accept=' + req.getHeader('Accept'));
+        System.debug('Request Body Size: ' + fileBlob.size());
+
+        Http http = new Http();
+        HttpResponse res = http.send(req);
+
+        System.debug('HTTP Status: ' + res.getStatus());
+        System.debug('HTTP Response: ' + res.getBody());
+
+        if (res.getStatusCode() != 201) {
+            throw new CalloutException('Error uploading file: ' + res.getStatus() + ' - ' + res.getBody());
+        }
+    } catch (Exception e) {
+        System.debug('Exception occurred while uploading file: ' + e.getMessage());
+        throw new CalloutException('Error during callout: ' + e.getMessage());
     }
+}
+
+
+
+    // Method to rename a SharePoint item
+    @AuraEnabled
+    public static void renameSharePointItem(String itemId, String newName) {
+        try {
+            String accessToken = getAccessToken();
+            String siteId = getSiteId();
+            String sharepointUrl = 'callout:SharePointNamedCredential/v1.0/sites/' + siteId + '/drive/items/' + itemId;
+
+            Map<String, Object> renameData = new Map<String, Object>();
+            renameData.put('name', newName);
+
+            String response = callout(sharepointUrl, 'PATCH', accessToken, JSON.serialize(renameData));
+            System.debug('Rename Item Response: ' + response);
+        } catch (Exception e) {
+            System.debug('Exception occurred while renaming item: ' + e.getMessage());
+            throw new CalloutException('Error during callout: ' + e.getMessage());
+        }
+    }
+    
+
+
+    // Method to delete a SharePoint item
+    @AuraEnabled
+    public static void deleteSharePointItem(String itemId) {
+        try {
+            String accessToken = getAccessToken();
+            String siteId = getSiteId();
+            String sharepointUrl = 'callout:SharePointNamedCredential/v1.0/sites/' + siteId + '/drive/items/' + itemId;
+            System.debug('-----sharepointUrl---- ' + sharepointUrl);
+            String response = callout(sharepointUrl, 'DELETE', accessToken);
+            System.debug('Delete Item Response: ' + response);
+        } catch (Exception e) {
+            System.debug('Exception occurred while deleting item: ' + e.getMessage());
+            throw new CalloutException('Error during callout: ' + e.getMessage());
+        }
+    }
+
+    // Method to get the preview URL of a SharePoint item
+    @AuraEnabled
+    public static String getSharePointItemPreviewUrl(String itemId) {
+        try {
+            String accessToken = getAccessToken();
+            String siteId = getSiteId();
+            String sharepointUrl = 'callout:SharePointNamedCredential/v1.0/sites/' + siteId + '/drive/items/' + itemId + '/preview';
+
+            HttpRequest req = new HttpRequest();
+            req.setEndpoint(sharepointUrl);
+            req.setMethod('POST');
+            req.setHeader('Authorization', 'Bearer ' + accessToken);
+            req.setHeader('Content-Type', 'application/json');
+            req.setHeader('Accept', 'application/json');
+            req.setHeader('Content-Length', '0');  // Add this header to specify content length
+
+            Http http = new Http();
+            HttpResponse res = http.send(req);
+
+            System.debug('HTTP Status: ' + res.getStatus());
+            System.debug('HTTP Response: ' + res.getBody());
+
+            if (res.getStatusCode() == 200 || res.getStatusCode() == 201 || res.getStatusCode() == 204) {
+                return res.getBody();
+            } else {
+                throw new CalloutException('Error during callout: ' + res.getStatus() + ' - ' + res.getBody());
+            }
+        } catch (Exception e) {
+            System.debug('Exception occurred while getting preview URL: ' + e.getMessage());
+            throw new CalloutException('Error during callout: ' + e.getMessage());
+        }
+    }
+
+    // Method to get the download URL of a SharePoint item
+    @AuraEnabled
+    public static String getSharePointItemDownloadUrl(String itemId) {
+        try {
+            String accessToken = getAccessToken();
+            String siteId = getSiteId();
+            String sharepointUrl = 'callout:SharePointNamedCredential/v1.0/sites/' + siteId + '/drive/items/' + itemId + '/content';
+
+            HttpRequest req = new HttpRequest();
+            req.setEndpoint(sharepointUrl);
+            req.setMethod('GET');
+            req.setHeader('Authorization', 'Bearer ' + accessToken);
+            req.setHeader('Content-Type', 'application/json');
+            req.setHeader('Accept', 'application/json');
+
+            Http http = new Http();
+            HttpResponse res = http.send(req);
+
+            System.debug('HTTP Status: ' + res.getStatus());
+            System.debug('HTTP Response: ' + res.getBody());
+
+            if (res.getStatusCode() == 200 || res.getStatusCode() == 201 || res.getStatusCode() == 204) {
+                return sharepointUrl; // Return the URL for download
+            } else if (res.getStatusCode() == 302) {
+                return res.getHeader('Location'); // Return the redirect URL for download
+            } else {
+                throw new CalloutException('Error during callout: ' + res.getStatus() + ' - ' + res.getBody());
+            }
+        } catch (Exception e) {
+            System.debug('Exception occurred while getting download URL: ' + e.getMessage());
+            throw new CalloutException('Error during callout: ' + e.getMessage());
+        }
+    }
+
+    // Custom Exceptions
+    public class AuthenticationException extends Exception {}
+    public class CalloutException extends Exception {}
+    public class SiteIdNotFoundException extends Exception {}
 }
