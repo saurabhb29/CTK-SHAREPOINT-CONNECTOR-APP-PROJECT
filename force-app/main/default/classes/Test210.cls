@@ -5,7 +5,8 @@ public class Test210 {
     // Custom exception class
     public class AuthenticationException extends Exception {}
 
-    // Method to save the encrypted access token into the custom object
+    // Future method to save the encrypted access token into the custom object
+    @future
     public static void saveAccessToken(String token) {
         try {
             // Encrypt the token
@@ -14,32 +15,17 @@ public class Test210 {
             Blob encryptedData = Crypto.encryptWithManagedIV('AES256', key, data);
             String encryptedToken = EncodingUtil.base64Encode(encryptedData);
 
-            // Save the new token record asynchronously
-            System.enqueueJob(new SaveAccessTokenJob(encryptedToken));
+            // Delete existing token records before saving a new one
+            List<AccessToken__c> oldTokenRecords = [SELECT Id FROM AccessToken__c];
+            delete oldTokenRecords;
+
+            // Save the new token record
+            AccessToken__c tokenRecord = new AccessToken__c();
+            tokenRecord.Token__c = encryptedToken;
+            insert tokenRecord;
         } catch (Exception e) {
             System.debug('Exception while saving access token: ' + e.getMessage());
             // Handle exception as needed
-        }
-    }
-
-    // Queueable class to handle the DML operation
-    public class SaveAccessTokenJob implements Queueable {
-        private String encryptedToken;
-
-        public SaveAccessTokenJob(String encryptedToken) {
-            this.encryptedToken = encryptedToken;
-        }
-
-        public void execute(QueueableContext context) {
-            try {
-                // Upsert the token record to reduce DML statements
-                AccessToken__c tokenRecord = new AccessToken__c();
-                tokenRecord.Token__c = encryptedToken;
-                upsert tokenRecord;
-            } catch (Exception e) {
-                System.debug('Exception in Queueable job while saving access token: ' + e.getMessage());
-                // Handle exception as needed
-            }
         }
     }
 
@@ -81,7 +67,7 @@ public class Test210 {
             System.debug('HTTP Status (Access Token): ' + res.getStatus());
             System.debug('HTTP Response (Access Token): ' + res.getBody());
 
-            if (res.getStatusCode() == 200 || res.getStatusCode() == 202) {
+            if (res.getStatusCode() == 200) {
                 Map<String, Object> responseMap = (Map<String, Object>) JSON.deserializeUntyped(res.getBody());
                 String token = (String) responseMap.get('access_token');
                 // Save the token asynchronously
@@ -120,7 +106,6 @@ public class Test210 {
                 token = getAccessToken();
             }
 
-            // Construct HTTP request
             HttpRequest req = new HttpRequest();
             String endpoint = 'https://graph.microsoft.com/v1.0/sites/cynoteck.sharepoint.com,c9dee470-0a13-4670-882b-9764b2ea99aa,34774c41-d9c0-4be1-9dd6-6b24a35c22c5/drive/root/children';
             req.setEndpoint(endpoint);
@@ -128,19 +113,23 @@ public class Test210 {
             req.setHeader('Authorization', 'Bearer ' + token);
             req.setHeader('Accept', 'application/json');
 
-            // Perform the HTTP callout
+            System.debug('Request Endpoint: ' + endpoint);
+            System.debug('Authorization: Bearer ' + token);
+
             Http http = new Http();
             HttpResponse res = http.send(req);
 
-            // Handle HTTP response
-            if (res.getStatusCode() == 200 || res.getStatusCode() == 202) {
-                // Handle successful response
+            System.debug('HTTP Status (Get Folder): ' + res.getStatus());
+            System.debug('HTTP Response (Get Folder): ' + res.getBody());
+
+            if (res.getStatusCode() == 200) {
+                // Handle successful folder retrieval
                 String responseBody = res.getBody();
                 System.debug('Folder retrieved: ' + responseBody);
                 return responseBody;
             } else {
                 // Handle error response
-                return httpErrorResponse(res);
+                return handleErrorResponse(res);
             }
         } catch (Exception e) {
             System.debug('Exception while getting folder with token: ' + e.getMessage());
@@ -149,7 +138,7 @@ public class Test210 {
     }
 
     // Method to handle error response
-    public static String httpErrorResponse(HttpResponse res) {
+    public static String handleErrorResponse(HttpResponse res) {
         Integer statusCode = res.getStatusCode();
         String responseBody = res.getBody();
 
