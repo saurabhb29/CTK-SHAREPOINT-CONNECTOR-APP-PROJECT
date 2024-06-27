@@ -1,6 +1,6 @@
 public class Test4 {
     private static final String NAMED_CREDENTIAL = 'MyNamedCred';
-
+    @AuraEnabled(cacheable=true)
     public static String getAccessToken() {
         HttpRequest req = new HttpRequest();
         req.setEndpoint('callout:' + NAMED_CREDENTIAL + '/token');
@@ -27,31 +27,7 @@ public class Test4 {
 
     public class AuthenticationException extends Exception {}
 
-    @AuraEnabled(cacheable=true)
-    public static String getSharePointData() {
-        try {
-            // Get access token
-            String accessToken = getAccessToken();
-
-            // Construct SharePoint API URL using Named Credential
-            String namedCredential = 'callout:SharePointNamedCredential'; // Replace with your Named Credential name
-            String relativeUrl = '/v1.0/sites/cynoteck.sharepoint.com,c9dee470-0a13-4670-882b-9764b2ea99aa,34774c41-d9c0-4be1-9dd6-6b24a35c22c5/lists/5a2e71dd-98be-4aa4-a5cb-44eb68742055/items?$expand=fields';
-          //  String sharepointUrl = 'https://graph.microsoft.com/v1.0/sites/cynoteck.sharepoint.com,c9dee470-0a13-4670-882b-9764b2ea99aa,34774c41-d9c0-4be1-9dd6-6b24a35c22c5/lists/5a2e71dd-98be-4aa4-a5cb-44eb68742055/items?$expand=fields';
-			String sharepointUrl = namedCredential + relativeUrl;
-            System.debug('SharePoint Data URL: ' + sharepointUrl);
-
-            // Make the callout
-            String response = callout(sharepointUrl, 'GET', accessToken);
-            // Log the response
-            System.debug('SharePoint Data Response: ' + response);
-            return response;
-        } catch (Exception e) {
-            // Handle exceptions
-            System.debug('Exception occurred: ' + e.getMessage());
-            return null;
-        }
-    }
-
+   
     private static String callout(String url, String method, String accessToken) {
         HttpRequest req = new HttpRequest();
         req.setEndpoint(url);

@@ -1,0 +1,10 @@
+<template>
+    <lightning-button label="Authenticate and Show Data" onclick={authenticateAndShowData}></lightning-button>
+    <template if:true={showDataTable}>
+    <c-data-table access-token={accessToken}></c-data-table>
+    </template>
+    <!-- Example logout button in a different component or page -->
+
+    <lightning-button label="Logout" onclick={handleLogout}></lightning-button>
+   
+    </template>

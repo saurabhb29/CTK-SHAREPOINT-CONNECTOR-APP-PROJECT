@@ -1,24 +1,18 @@
 <template>
-    <template if:true={isAuthenticated}>
-        <!-- Display data table when authenticated -->
-        <lightning-card title="SharePoint Data" icon-name="standard:document">
-            <div class="slds-m-around_medium">
-                <lightning-datatable
-                    data={data}
-                    columns={columns}
-                    key-field="id"
-                    hide-checkbox-column="true">
-                </lightning-datatable>
-            </div>
-        </lightning-card>
-    </template>
-    <template if:false={isAuthenticated}>
-        <!-- Display authentication button when not authenticated -->
-        <lightning-card title="Authenticate to SharePoint" icon-name="standard:connected_apps">
-            <div class="slds-m-around_medium">
-                <p>Please authenticate to access SharePoint data.</p>
-                <lightning-button label="Authenticate" onclick={authenticate} variant="brand"></lightning-button>
-            </div>
-        </lightning-card>
-    </template>
+    <lightning-card title="Folder Viewer" icon-name="custom:custom63">
+        <div class="slds-m-around_medium">
+            <lightning-button label="View Folder" onclick={handleViewFolderClick}></lightning-button>
+            <template if:true={folderContent.length}>
+                <lightning-card title="Folder Content" icon-name="custom:custom37">
+                    <div class="slds-m-around_medium">
+                        <lightning-datatable
+                            key-field="id"
+                            data={folderContent}
+                            columns={columns}>
+                        </lightning-datatable>
+                    </div>
+                </lightning-card>
+            </template>
+        </div>
+    </lightning-card>
 </template>
