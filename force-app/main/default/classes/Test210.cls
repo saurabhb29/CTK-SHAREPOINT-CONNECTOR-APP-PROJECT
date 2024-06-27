@@ -14,34 +14,32 @@ public class Test210 {
             Blob encryptedData = Crypto.encryptWithManagedIV('AES256', key, data);
             String encryptedToken = EncodingUtil.base64Encode(encryptedData);
 
-            // Delete existing token records before saving a new one
-            List<AccessToken__c> oldTokenRecords = [SELECT Id FROM AccessToken__c];
             // Save the new token record asynchronously
-            saveAccessTokenAsync(oldTokenRecords, encryptedToken);
+            System.enqueueJob(new SaveAccessTokenJob(encryptedToken));
         } catch (Exception e) {
             System.debug('Exception while saving access token: ' + e.getMessage());
             // Handle exception as needed
         }
     }
 
-    // Asynchronous method to delete old token records and insert a new token record
-    @future
-    public static void saveAccessTokenAsync(List<AccessToken__c> oldTokenRecords, String encryptedToken) {
-        try {
-            List<SObject> recordsToProcess = new List<SObject>();
-            recordsToProcess.addAll(oldTokenRecords);
-            
-            AccessToken__c tokenRecord = new AccessToken__c();
-            tokenRecord.Token__c = encryptedToken;
-            recordsToProcess.add(tokenRecord);
+    // Queueable class to handle the DML operation
+    public class SaveAccessTokenJob implements Queueable {
+        private String encryptedToken;
 
-            if (!recordsToProcess.isEmpty()) {
-                Database.delete(oldTokenRecords, false); // Delete old records without failing the whole transaction
-                insert tokenRecord; // Insert the new token record
+        public SaveAccessTokenJob(String encryptedToken) {
+            this.encryptedToken = encryptedToken;
+        }
+
+        public void execute(QueueableContext context) {
+            try {
+                // Upsert the token record to reduce DML statements
+                AccessToken__c tokenRecord = new AccessToken__c();
+                tokenRecord.Token__c = encryptedToken;
+                upsert tokenRecord;
+            } catch (Exception e) {
+                System.debug('Exception in Queueable job while saving access token: ' + e.getMessage());
+                // Handle exception as needed
             }
-        } catch (Exception e) {
-            System.debug('Exception in async method while saving access token: ' + e.getMessage());
-            // Handle exception as needed
         }
     }
 
